@@ -71,7 +71,7 @@ class _MobileKeyPanelState extends State<MobileKeyPanel> {
 
   Widget _tabBar() {
     return SizedBox(
-      height: 40,
+      height: 34,
       child: Row(
         children: [
           for (var i = 0; i < _tabs.length; i++)
@@ -99,8 +99,10 @@ class _MobileKeyPanelState extends State<MobileKeyPanel> {
               ),
             ),
           IconButton(
-            iconSize: 20,
+            iconSize: 18,
             color: Colors.white70,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 32),
             icon: const Icon(Icons.close),
             onPressed: widget.onClose,
           ),
@@ -269,9 +271,9 @@ class _MobileKeyPanelState extends State<MobileKeyPanel> {
     ];
 
     return LayoutBuilder(builder: (context, c) {
-      const gap = 4.0;
+      const gap = 3.0;
       final rowH = (c.maxHeight - gap * (rows.length + 1)) / rows.length;
-      final fontSize = (rowH * 0.42).clamp(11.0, 18.0).toDouble();
+      final fontSize = (rowH * 0.44).clamp(11.0, 17.0).toDouble();
       return Padding(
         padding: const EdgeInsets.all(gap),
         child: Column(

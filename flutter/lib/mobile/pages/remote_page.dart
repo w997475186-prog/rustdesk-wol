@@ -109,6 +109,9 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   /// UU style key panel: our own surface (输入法 / 快捷键 / 电脑键盘) laid out
   /// below the canvas instead of the system IME floating on top of it.
   bool _showKeyPanel = false;
+
+  /// Height the user dragged the key panel to, null until they do.
+  double? _keyPanelHeight;
   String _value = '';
   Orientation? _currentOrientation;
   final _uniqueKey = UniqueKey();
@@ -498,6 +501,24 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     });
   }
 
+  /// Show/hide our key panel.
+  ///
+  /// Opening it must put the soft keyboard away first: two keyboards on one
+  /// screen is what made the peer image disappear completely.
+  void _toggleKeyPanel() {
+    if (_showKeyPanel) {
+      setState(() => _showKeyPanel = false);
+      return;
+    }
+    gFFI.invokeMethod("enable_soft_keyboard", false);
+    _mobileFocusNode.unfocus();
+    _physicalFocusNode.requestFocus();
+    setState(() {
+      _showEdit = false;
+      _showKeyPanel = true;
+    });
+  }
+
   /// The touchpad is the default pointer on a phone: dragging a tiny mouse icon
   /// around (the previous default) is what made the buttons feel unusable.
   /// Runs once, as soon as the peer's version is known, and does nothing if the
@@ -738,8 +759,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                                       ? Colors.yellow
                                       : Colors.white,
                                   icon: const Icon(Icons.keyboard),
-                                  onPressed: () => setState(() =>
-                                      _showKeyPanel = !_showKeyPanel),
+                                  onPressed: _toggleKeyPanel,
                               ),
                               IconButton(
                                 color: Colors.white,
@@ -894,22 +914,55 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     if (!_showKeyPanel) {
       return canvas;
     }
-    // Give the panel its own band instead of letting it cover the canvas: the
-    // peer image is scaled into the space that is left, which is what UU does.
+    // The panel gets its own band and the peer image is scaled into what is
+    // left. Kept low on purpose: a keyboard that eats most of a landscape
+    // phone leaves nothing to look at, so the default is ~38% and the user can
+    // drag the strip above it to make it taller.
     final screenH = MediaQuery.of(context).size.height;
-    final panelH = (screenH * 0.5).clamp(200.0, 340.0).toDouble();
+    final defaultH = (screenH * 0.40).clamp(170.0, 280.0).toDouble();
+    final panelH =
+        (_keyPanelHeight ?? defaultH).clamp(120.0, screenH * 0.7).toDouble();
+    final maxPanelH = (screenH * 0.7).toDouble();
     return Column(children: [
       Expanded(child: canvas),
       SizedBox(
         height: panelH,
-        child: MobileKeyPanel(
-          input: gFFI.inputModel,
-          onOpenIme: () {
-            setState(() => _showKeyPanel = false);
-            openKeyboard();
-          },
-          onClose: () => setState(() => _showKeyPanel = false),
-        ),
+        child: Column(children: [
+          // Drag strip: pull up for a taller keyboard, down to give the screen
+          // more room. Tap it to collapse the panel entirely.
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => setState(() => _showKeyPanel = false),
+            onVerticalDragUpdate: (d) => setState(() {
+              final next = (_keyPanelHeight ?? panelH) - d.delta.dy;
+              _keyPanelHeight = next.clamp(120.0, maxPanelH);
+            }),
+            child: Container(
+              height: 14,
+              color: const Color(0xFF151515),
+              child: Center(
+                child: Container(
+                  width: 46,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white30,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: MobileKeyPanel(
+              input: gFFI.inputModel,
+              onOpenIme: () {
+                setState(() => _showKeyPanel = false);
+                openKeyboard();
+              },
+              onClose: () => setState(() => _showKeyPanel = false),
+            ),
+          ),
+        ]),
       ),
     ]);
   }
