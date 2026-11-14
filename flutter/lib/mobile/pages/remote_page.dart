@@ -100,10 +100,6 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   /// cursor instead of receiving absolute jumps.
   bool _showTouchpad = false;
   bool _touchModeBeforeTouchpad = false;
-
-  /// Set once the "start with the touchpad" check has run for this session, so
-  /// turning the touchpad off is not undone on the next rebuild.
-  bool _touchpadAutoChecked = false;
   String _value = '';
   Orientation? _currentOrientation;
   final _uniqueKey = UniqueKey();
@@ -474,49 +470,6 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     inputModel.inputKey(char);
   }
 
-  /// Switch the touchpad on/off, keeping the peer's input mode in step.
-  ///
-  /// The touchpad only produces relative deltas, so relative mouse mode must be
-  /// on for them to reach the peer, and the peer's own touch mode must be off:
-  /// its one finger pan starts with an absolute jump that fights the deltas.
-  void _setTouchpad(bool next) {
-    setState(() {
-      _showTouchpad = next;
-      if (next) {
-        _touchModeBeforeTouchpad = gFFI.ffiModel.touchMode;
-        gFFI.ffiModel.setTouchMode(false);
-        gFFI.inputModel.setRelativeMouseMode(true);
-      } else {
-        gFFI.inputModel.setRelativeMouseMode(false);
-        gFFI.ffiModel.setTouchMode(_touchModeBeforeTouchpad);
-      }
-    });
-  }
-
-  /// The touchpad is the default pointer on a phone: dragging a tiny mouse icon
-  /// around (the previous default) is what made the buttons feel unusable.
-  /// Runs once, as soon as the peer's version is known, and does nothing if the
-  /// peer cannot do relative mouse movement.
-  void _maybeEnableTouchpadByDefault() {
-    if (_touchpadAutoChecked) {
-      return;
-    }
-    if (!gFFI.ffiModel.pi.isSet.isTrue || gFFI.ffiModel.waitForFirstImage.isTrue) {
-      return;
-    }
-    _touchpadAutoChecked = true;
-    if (_showTouchpad ||
-        gFFI.ffiModel.viewOnly ||
-        !gFFI.inputModel.isRelativeMouseModeSupported) {
-      return;
-    }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && !_showTouchpad) {
-        _setTouchpad(true);
-      }
-    });
-  }
-
   void openKeyboard() {
     final allowWaylandKeyboard =
         mainGetPeerBoolOptionSync(widget.id, kPeerOptionAllowWaylandKeyboard);
@@ -718,7 +671,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                           ? [
                               IconButton(
                                   color: Colors.white,
-                                  icon: const Icon(Icons.keyboard),
+                                  icon: Icon(Icons.keyboard),
                                   onPressed: openKeyboard),
                               IconButton(
                                 color: Colors.white,
@@ -728,10 +681,9 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                               )
                             ]
                           : [
-                              // Upstream behaviour: the phone's own keyboard.
                               IconButton(
                                   color: Colors.white,
-                                  icon: const Icon(Icons.keyboard),
+                                  icon: Icon(Icons.keyboard),
                                   onPressed: openKeyboard),
                               IconButton(
                                 color: Colors.white,
@@ -751,13 +703,32 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                                         ? MyTheme.accent
                                         : Colors.white),
                                 onPressed: () {
-                                  if (!_showTouchpad &&
+                                  final next = !_showTouchpad;
+                                  if (next &&
                                       !gFFI.inputModel
                                           .isRelativeMouseModeSupported) {
                                     showToast(translate('Not available'));
                                     return;
                                   }
-                                  _setTouchpad(!_showTouchpad);
+                                  setState(() {
+                                    _showTouchpad = next;
+                                    if (next) {
+                                      // The peer needs the activation marker
+                                      // before it accepts move_relative, and
+                                      // touch mode must go: its one finger pan
+                                      // starts with an absolute jump.
+                                      _touchModeBeforeTouchpad =
+                                          gFFI.ffiModel.touchMode;
+                                      gFFI.ffiModel.setTouchMode(false);
+                                      gFFI.inputModel
+                                          .setRelativeMouseMode(true);
+                                    } else {
+                                      gFFI.inputModel
+                                          .setRelativeMouseMode(false);
+                                      gFFI.ffiModel.setTouchMode(
+                                          _touchModeBeforeTouchpad);
+                                    }
+                                  });
                                 },
                               ),
                             ]) +
@@ -813,12 +784,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       (!gFFI.inputModel.relativeMouseMode.value || _showTouchpad);
 
   Widget getBodyForMobile() {
-    _maybeEnableTouchpadByDefault();
-    // LayoutBuilder for the touchpad: it is positioned inside this stack, so it
-    // must clamp against the stack (which is shorter than the screen by the
-    // bottom toolbar) or its button row slides under the toolbar.
-    final canvas = LayoutBuilder(builder: (context, box) {
-      return Container(
+    return Container(
         color: MyTheme.canvasColor,
         child: Stack(children: () {
           final paints = [
@@ -873,7 +839,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           if (_showTouchpad) {
             // Relative-only input; the floating widgets would fight it for
             // touches and their absolute mapping is what felt wrong here.
-            paints.add(TouchpadPanel(ffi: gFFI, bounds: box.biggest));
+            paints.add(TouchpadPanel(ffi: gFFI));
           } else if (gFFI.ffiModel.touchMode) {
             paints.add(FloatingMouse(
               ffi: gFFI,
@@ -885,9 +851,6 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           }
           return paints;
         }()));
-    });
-
-    return canvas;
   }
 
   Widget getBodyForDesktopWithListener() {
