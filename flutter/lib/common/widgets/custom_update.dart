@@ -65,10 +65,10 @@ Future<void> showCustomUpdateCheck() async {
               child: Text(notes),
             ),
           if (!isWindows)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child:
-                  const Text('https://144-24-53-228.sslip.io:21114/rustdesk.apk'),
+            const Padding(
+              padding: EdgeInsets.only(top: 8),
+              child: Text(
+                  '确认后在浏览器里下载安装包，下载完点通知栏的安装提示即可（安卓不允许静默安装）。'),
             ),
         ],
       ),
@@ -79,7 +79,12 @@ Future<void> showCustomUpdateCheck() async {
           if (!isWindows) {
             // Android can not install silently, it must hand the apk to the
             // system installer, so just open the download link.
-            launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+            final ok =
+                await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+            if (!ok) {
+              // Nothing to open a browser with: at least keep the link reachable.
+              showToast(url);
+            }
             return;
           }
           gFFI.dialogManager.showLoading(translate('Downloading...'));

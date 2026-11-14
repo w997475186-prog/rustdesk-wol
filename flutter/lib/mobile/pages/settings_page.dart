@@ -12,6 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 
 import '../../common.dart';
+import '../../common/widgets/custom_update.dart';
 import '../../common/widgets/dialog.dart';
 import '../../common/widgets/login.dart';
 import '../../consts.dart';
@@ -1210,6 +1211,18 @@ void showAbout(OverlayDialogManager dialogManager) {
       title: Text(translate('About RustDesk')),
       content: Wrap(direction: Axis.vertical, spacing: 12, children: [
         Text('Version: $version'),
+        InkWell(
+            onTap: () async {
+              close();
+              await showCustomUpdateCheck();
+            },
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Text(translate('Check for Updates'),
+                  style: TextStyle(
+                    decoration: TextDecoration.underline,
+                  )),
+            )),
         InkWell(
             onTap: () async {
               const url = 'https://rustdesk.com/';
