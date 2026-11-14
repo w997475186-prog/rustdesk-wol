@@ -28,7 +28,13 @@ import 'package:flutter_hbb/models/model.dart';
 class TouchpadPanel extends StatefulWidget {
   final FFI ffi;
 
-  const TouchpadPanel({Key? key, required this.ffi}) : super(key: key);
+  /// Size of the canvas the panel lives in. Not MediaQuery: the canvas is
+  /// shorter than the screen once the bottom toolbar is in, and clamping against
+  /// the screen let the button row slide underneath it.
+  final Size bounds;
+
+  const TouchpadPanel({Key? key, required this.ffi, required this.bounds})
+      : super(key: key);
 
   @override
   State<TouchpadPanel> createState() => TouchpadPanelState();
@@ -184,7 +190,7 @@ class TouchpadPanelState extends State<TouchpadPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final screen = MediaQuery.of(context).size;
+    final screen = widget.bounds;
     final m = _metrics(screen);
     _position ??= _clamp(
         Offset(screen.width - m.w - 12, screen.height * 0.24), screen, m.w, m.h);

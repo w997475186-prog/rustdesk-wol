@@ -8,7 +8,6 @@ import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/mobile/widgets/floating_mouse.dart';
 import 'package:flutter_hbb/mobile/widgets/floating_mouse_widgets.dart';
 import 'package:flutter_hbb/mobile/widgets/gesture_help.dart';
-import 'package:flutter_hbb/mobile/widgets/key_panel.dart';
 import 'package:flutter_hbb/mobile/widgets/touchpad.dart';
 import 'package:flutter_hbb/models/chat_model.dart';
 import 'package:flutter_hbb/models/state_model.dart';
@@ -105,13 +104,6 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   /// Set once the "start with the touchpad" check has run for this session, so
   /// turning the touchpad off is not undone on the next rebuild.
   bool _touchpadAutoChecked = false;
-
-  /// UU style key panel: our own surface (输入法 / 快捷键 / 电脑键盘) laid out
-  /// below the canvas instead of the system IME floating on top of it.
-  bool _showKeyPanel = false;
-
-  /// Height the user dragged the key panel to, null until they do.
-  double? _keyPanelHeight;
   String _value = '';
   Orientation? _currentOrientation;
   final _uniqueKey = UniqueKey();
@@ -501,24 +493,6 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     });
   }
 
-  /// Show/hide our key panel.
-  ///
-  /// Opening it must put the soft keyboard away first: two keyboards on one
-  /// screen is what made the peer image disappear completely.
-  void _toggleKeyPanel() {
-    if (_showKeyPanel) {
-      setState(() => _showKeyPanel = false);
-      return;
-    }
-    gFFI.invokeMethod("enable_soft_keyboard", false);
-    _mobileFocusNode.unfocus();
-    _physicalFocusNode.requestFocus();
-    setState(() {
-      _showEdit = false;
-      _showKeyPanel = true;
-    });
-  }
-
   /// The touchpad is the default pointer on a phone: dragging a tiny mouse icon
   /// around (the previous default) is what made the buttons feel unusable.
   /// Runs once, as soon as the peer's version is known, and does nothing if the
@@ -754,13 +728,11 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                               )
                             ]
                           : [
+                              // Upstream behaviour: the phone's own keyboard.
                               IconButton(
-                                  color: _showKeyPanel
-                                      ? Colors.yellow
-                                      : Colors.white,
+                                  color: Colors.white,
                                   icon: const Icon(Icons.keyboard),
-                                  onPressed: _toggleKeyPanel,
-                              ),
+                                  onPressed: openKeyboard),
                               IconButton(
                                 color: Colors.white,
                                 icon: Icon(gFFI.ffiModel.touchMode
@@ -842,7 +814,11 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
 
   Widget getBodyForMobile() {
     _maybeEnableTouchpadByDefault();
-    final canvas = Container(
+    // LayoutBuilder for the touchpad: it is positioned inside this stack, so it
+    // must clamp against the stack (which is shorter than the screen by the
+    // bottom toolbar) or its button row slides under the toolbar.
+    final canvas = LayoutBuilder(builder: (context, box) {
+      return Container(
         color: MyTheme.canvasColor,
         child: Stack(children: () {
           final paints = [
@@ -853,12 +829,11 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
               child: QualityMonitor(gFFI.qualityMonitorModel),
             ),
             Obx(() {
-              // The built-in shortcut strip used to appear over the canvas
-              // whenever the soft keyboard was up, covering the bottom rows of
-              // the peer screen. Our key panel (快捷键 tab) replaced it, so keep
-              // the overlay for the gesture help only.
+              final chatKeyboardRequested =
+                  gFFI.chatModel.softKeyboardRequested.value;
               return KeyHelpTools(
-                  keyboardIsVisible: false,
+                  keyboardIsVisible: keyboardVisibilityController.isVisible &&
+                      (_showEdit || chatKeyboardRequested),
                   showGestureHelp: _showGestureHelp);
             }),
             SizedBox(
@@ -898,7 +873,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           if (_showTouchpad) {
             // Relative-only input; the floating widgets would fight it for
             // touches and their absolute mapping is what felt wrong here.
-            paints.add(TouchpadPanel(ffi: gFFI));
+            paints.add(TouchpadPanel(ffi: gFFI, bounds: box.biggest));
           } else if (gFFI.ffiModel.touchMode) {
             paints.add(FloatingMouse(
               ffi: gFFI,
@@ -910,61 +885,9 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           }
           return paints;
         }()));
+    });
 
-    if (!_showKeyPanel) {
-      return canvas;
-    }
-    // The panel gets its own band and the peer image is scaled into what is
-    // left. Kept low on purpose: a keyboard that eats most of a landscape
-    // phone leaves nothing to look at, so the default is ~38% and the user can
-    // drag the strip above it to make it taller.
-    final screenH = MediaQuery.of(context).size.height;
-    final defaultH = (screenH * 0.40).clamp(170.0, 280.0).toDouble();
-    final panelH =
-        (_keyPanelHeight ?? defaultH).clamp(120.0, screenH * 0.7).toDouble();
-    final maxPanelH = (screenH * 0.7).toDouble();
-    return Column(children: [
-      Expanded(child: canvas),
-      SizedBox(
-        height: panelH,
-        child: Column(children: [
-          // Drag strip: pull up for a taller keyboard, down to give the screen
-          // more room. Tap it to collapse the panel entirely.
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () => setState(() => _showKeyPanel = false),
-            onVerticalDragUpdate: (d) => setState(() {
-              final next = (_keyPanelHeight ?? panelH) - d.delta.dy;
-              _keyPanelHeight = next.clamp(120.0, maxPanelH);
-            }),
-            child: Container(
-              height: 14,
-              color: const Color(0xFF151515),
-              child: Center(
-                child: Container(
-                  width: 46,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.white30,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          Expanded(
-            child: MobileKeyPanel(
-              input: gFFI.inputModel,
-              onOpenIme: () {
-                setState(() => _showKeyPanel = false);
-                openKeyboard();
-              },
-              onClose: () => setState(() => _showKeyPanel = false),
-            ),
-          ),
-        ]),
-      ),
-    ]);
+    return canvas;
   }
 
   Widget getBodyForDesktopWithListener() {

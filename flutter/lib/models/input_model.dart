@@ -1353,29 +1353,6 @@ class InputModel {
         command: command);
   }
 
-  /// One key press with explicit modifiers.
-  ///
-  /// [inputKey] uses the modifiers the keyboard currently holds; the on-screen
-  /// key panels need to press e.g. ctrl+c without ever holding ctrl down, and
-  /// they must not disturb the real modifier state.
-  void inputKeyWith(String name,
-      {bool alt = false,
-      bool ctrl = false,
-      bool shift = false,
-      bool command = false}) {
-    if (!keyboardPerm) return;
-    if (isViewCamera) return;
-    bind.sessionInputKey(
-        sessionId: sessionId,
-        name: name,
-        down: false,
-        press: true,
-        alt: alt,
-        ctrl: ctrl,
-        shift: shift,
-        command: command);
-  }
-
   static Map<String, dynamic> getMouseEventMove() => {
         'type': _kMouseEventMove,
         'buttons': 0,
