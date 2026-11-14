@@ -1850,6 +1850,29 @@ pub fn main_custom_update_apply(url: String, sha256: String, build: String) -> S
     }
 }
 
+/// Download the announced package into `dest_dir` (the app cache dir, passed in
+/// by flutter) and verify it, so android can install it without a browser.
+///
+/// Returns "ok:<path>" on success, "error:..." otherwise. Installing is done on
+/// the java side (FileProvider + ACTION_VIEW), this only fetches the file.
+pub fn main_custom_update_download(
+    url: String,
+    sha256: String,
+    build: String,
+    dest_dir: String,
+) -> String {
+    let dest = std::path::Path::new(&dest_dir).join("rustdesk-update.apk");
+    match crate::common::custom_update_download(&url, &sha256, &dest) {
+        Ok(_) => {
+            // Remember what we just downloaded so the next check can tell it
+            // apart from the build that is actually installed.
+            hbb_common::config::Config::set_option("custom-build".to_owned(), build);
+            format!("ok:{}", dest.display())
+        }
+        Err(e) => format!("error:{}", e),
+    }
+}
+
 pub fn main_get_home_dir() -> String {
     fs::get_home_as_string()
 }

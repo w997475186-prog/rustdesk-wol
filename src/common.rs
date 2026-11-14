@@ -3120,6 +3120,39 @@ pub fn custom_update_check() -> ResultType<String> {
     Ok(resp.text()?)
 }
 
+/// Download a package from our own server and verify it against the manifest
+/// checksum, writing it to `dest`.
+///
+/// Android uses this so the update never has to go through a browser: the file
+/// lands inside the app's own cache dir, ready to be handed to the installer.
+pub fn custom_update_download(
+    url: &str,
+    expected_sha256: &str,
+    dest: &std::path::Path,
+) -> ResultType<()> {
+    use sha2::{Digest, Sha256};
+
+    let client = crate::hbbs_http::create_http_client_with_url(url);
+    let mut resp = client
+        .get(url)
+        .timeout(std::time::Duration::from_secs(900))
+        .send()?;
+    if !resp.status().is_success() {
+        bail!("HTTP {}", resp.status());
+    }
+    let mut buf: Vec<u8> = Vec::with_capacity(40 * 1024 * 1024);
+    std::io::copy(&mut resp, &mut buf)?;
+    let got = hex::encode(Sha256::digest(&buf));
+    if !got.eq_ignore_ascii_case(expected_sha256) {
+        bail!("checksum mismatch: expected {}, got {}", expected_sha256, got);
+    }
+    if let Some(parent) = dest.parent() {
+        std::fs::create_dir_all(parent).ok();
+    }
+    std::fs::write(dest, &buf)?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

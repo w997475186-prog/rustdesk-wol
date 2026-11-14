@@ -804,11 +804,12 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
               child: QualityMonitor(gFFI.qualityMonitorModel),
             ),
             Obx(() {
-              final chatKeyboardRequested =
-                  gFFI.chatModel.softKeyboardRequested.value;
+              // The built-in shortcut strip used to appear over the canvas
+              // whenever the soft keyboard was up, covering the bottom rows of
+              // the peer screen. Our key panel (快捷键 tab) replaced it, so keep
+              // the overlay for the gesture help only.
               return KeyHelpTools(
-                  keyboardIsVisible: keyboardVisibilityController.isVisible &&
-                      (_showEdit || chatKeyboardRequested),
+                  keyboardIsVisible: false,
                   showGestureHelp: _showGestureHelp);
             }),
             SizedBox(

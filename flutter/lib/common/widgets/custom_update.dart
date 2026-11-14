@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_hbb/common.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// Update flow of this fork: everything comes from our own server instead of
@@ -75,7 +76,7 @@ Future<void> showCustomUpdateCheck() async {
             const Padding(
               padding: EdgeInsets.only(top: 8),
               child: Text(
-                  '确认后在浏览器里下载安装包，下载完点通知栏的安装提示即可（安卓不允许静默安装）。'),
+                  '确认后在应用内下载并校验安装包，随后直接弹出安装界面（首次需允许「安装未知应用」）。'),
             ),
         ],
       ),
@@ -83,16 +84,43 @@ Future<void> showCustomUpdateCheck() async {
         dialogButton('Cancel', onPressed: close, isOutline: true),
         dialogButton('OK', onPressed: () async {
           close();
+          if (isAndroid) {
+            // Fetch the apk inside the app (rust verifies the checksum), then
+            // hand the file to the system installer. No browser round trip.
+            gFFI.dialogManager.showLoading(translate('Downloading...'));
+            String res;
+            try {
+              final dir = (await getTemporaryDirectory()).path;
+              res = await bind.mainCustomUpdateDownload(
+                  url: url,
+                  sha256: sha256,
+                  build: remoteBuild,
+                  destDir: dir);
+            } catch (e) {
+              res = 'error:$e';
+            }
+            gFFI.dialogManager.dismissAll();
+            if (res.startsWith('ok:')) {
+              final launched =
+                  await gFFI.invokeMethod('install_apk', res.substring(3));
+              if (!launched) {
+                showToast('请在系统页面允许「安装未知应用」，再点一次更新');
+              }
+              return;
+            }
+            // Download failed: keep the old browser path as a fallback rather
+            // than leaving the user without a way to update.
+            showToast(res.replaceFirst('error:', ''));
+            await launchUrl(Uri.parse(url),
+                mode: LaunchMode.externalApplication);
+            return;
+          }
           if (!isWindows) {
-            // Android can not install silently, it must hand the apk to the
-            // system installer, so just open the download link.
+            // iOS/linux/mac: no installer to hand a file to, open the link.
             final ok =
                 await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
             if (!ok) {
-              // Nothing to open a browser with: at least keep the link reachable.
               showToast(url);
-            } else {
-              showToast('已打开浏览器，下载完成后点通知栏安装');
             }
             return;
           }

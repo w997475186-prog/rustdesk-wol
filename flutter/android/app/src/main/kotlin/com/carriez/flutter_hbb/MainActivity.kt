@@ -29,9 +29,11 @@ import android.media.MediaFormat
 import android.net.Uri
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
+import android.provider.Settings
 import android.webkit.MimeTypeMap
 import android.util.DisplayMetrics
 import androidx.annotation.RequiresApi
+import androidx.core.content.FileProvider
 import org.json.JSONArray
 import org.json.JSONObject
 import com.hjq.permissions.XXPermissions
@@ -285,6 +287,49 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    /**
+     * Launch the package installer for an apk we downloaded ourselves.
+     *
+     * Android 8+ additionally requires the user to allow this app to install
+     * unknown apps: when that flag is off we open the settings page instead of
+     * failing silently, and flutter tells the user to tap update again.
+     */
+    private fun installApk(path: String): Boolean {
+        return try {
+            val file = File(path)
+            if (!file.exists() || file.length() == 0L) {
+                Log.e(logTag, "installApk: missing file $path")
+                return false
+            }
+            // Kept as a nested if (not `&&`) so lint sees the api guard around
+            // both canRequestPackageInstalls and the settings action.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                if (!packageManager.canRequestPackageInstalls()) {
+                    Log.d(logTag, "installApk: unknown sources not allowed yet")
+                    startActivity(
+                        Intent(
+                            Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                            Uri.parse("package:$packageName")
+                        ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    )
+                    return false
+                }
+            }
+            val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+            startActivity(
+                Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(uri, "application/vnd.android.package-archive")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+            )
+            true
+        } catch (e: Exception) {
+            Log.e(logTag, "installApk failed: ${e.message}")
+            false
+        }
+    }
+
     private fun initFlutterChannel(flutterMethodChannel: MethodChannel) {
         flutterMethodChannel.setMethodCallHandler { call, result ->
             if (documentPicker.handle(call, result)) return@setMethodCallHandler
@@ -391,6 +436,15 @@ class MainActivity : FlutterActivity() {
                 "try_sync_clipboard" -> {
                     rdClipboardManager?.syncClipboard(true)
                     result.success(true)
+                }
+                // In-app update: rust downloaded and verified the apk into our
+                // cache dir, hand it to the system installer from there.
+                "install_apk" -> {
+                    if (call.arguments is String) {
+                        result.success(installApk(call.arguments as String))
+                    } else {
+                        result.success(false)
+                    }
                 }
                 GET_START_ON_BOOT_OPT -> {
                     val prefs = getSharedPreferences(KEY_SHARED_PREFERENCES, MODE_PRIVATE)

@@ -140,4 +140,6 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-stdlib") { version { strictly("1.9.10") } }
     implementation 'com.caverock:androidsvg-aar:1.4'
     implementation "rustls:rustls-platform-verifier:0.1.1"
+    // FileProvider for handing the downloaded update apk to the installer.
+    implementation 'androidx.core:core:1.13.1'
 }
