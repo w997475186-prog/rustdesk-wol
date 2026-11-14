@@ -8,6 +8,7 @@ import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/mobile/widgets/floating_mouse.dart';
 import 'package:flutter_hbb/mobile/widgets/floating_mouse_widgets.dart';
 import 'package:flutter_hbb/mobile/widgets/gesture_help.dart';
+import 'package:flutter_hbb/mobile/widgets/key_panel.dart';
 import 'package:flutter_hbb/mobile/widgets/touchpad.dart';
 import 'package:flutter_hbb/models/chat_model.dart';
 import 'package:flutter_hbb/models/state_model.dart';
@@ -100,6 +101,10 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   /// cursor instead of receiving absolute jumps.
   bool _showTouchpad = false;
   bool _touchModeBeforeTouchpad = false;
+
+  /// UU style key panel: our own surface (输入法 / 快捷键 / 电脑键盘) laid out
+  /// below the canvas instead of the system IME floating on top of it.
+  bool _showKeyPanel = false;
   String _value = '';
   Orientation? _currentOrientation;
   final _uniqueKey = UniqueKey();
@@ -671,7 +676,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                           ? [
                               IconButton(
                                   color: Colors.white,
-                                  icon: Icon(Icons.keyboard),
+                                  icon: const Icon(Icons.keyboard),
                                   onPressed: openKeyboard),
                               IconButton(
                                 color: Colors.white,
@@ -682,9 +687,13 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                             ]
                           : [
                               IconButton(
-                                  color: Colors.white,
-                                  icon: Icon(Icons.keyboard),
-                                  onPressed: openKeyboard),
+                                  color: _showKeyPanel
+                                      ? Colors.yellow
+                                      : Colors.white,
+                                  icon: const Icon(Icons.keyboard),
+                                  onPressed: () => setState(() =>
+                                      _showKeyPanel = !_showKeyPanel),
+                              ),
                               IconButton(
                                 color: Colors.white,
                                 icon: Icon(gFFI.ffiModel.touchMode
@@ -784,7 +793,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       (!gFFI.inputModel.relativeMouseMode.value || _showTouchpad);
 
   Widget getBodyForMobile() {
-    return Container(
+    final canvas = Container(
         color: MyTheme.canvasColor,
         child: Stack(children: () {
           final paints = [
@@ -851,6 +860,28 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           }
           return paints;
         }()));
+
+    if (!_showKeyPanel) {
+      return canvas;
+    }
+    // Give the panel its own band instead of letting it cover the canvas: the
+    // peer image is scaled into the space that is left, which is what UU does.
+    final screenH = MediaQuery.of(context).size.height;
+    final panelH = (screenH * 0.5).clamp(200.0, 340.0).toDouble();
+    return Column(children: [
+      Expanded(child: canvas),
+      SizedBox(
+        height: panelH,
+        child: MobileKeyPanel(
+          input: gFFI.inputModel,
+          onOpenIme: () {
+            setState(() => _showKeyPanel = false);
+            openKeyboard();
+          },
+          onClose: () => setState(() => _showKeyPanel = false),
+        ),
+      ),
+    ]);
   }
 
   Widget getBodyForDesktopWithListener() {
