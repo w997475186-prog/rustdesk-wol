@@ -1074,6 +1074,10 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
                 ),
                 leading: Icon(Icons.info)),
             SettingsTile(
+                onPressed: (context) => showCustomUpdateCheck(),
+                title: Text(translate("Check for Updates")),
+                leading: Icon(Icons.system_update)),
+            SettingsTile(
                 title: Text(translate("Build Date")),
                 value: Padding(
                   padding: EdgeInsets.symmetric(vertical: 8),
@@ -1211,18 +1215,6 @@ void showAbout(OverlayDialogManager dialogManager) {
       title: Text(translate('About RustDesk')),
       content: Wrap(direction: Axis.vertical, spacing: 12, children: [
         Text('Version: $version'),
-        InkWell(
-            onTap: () async {
-              close();
-              await showCustomUpdateCheck();
-            },
-            child: Padding(
-              padding: EdgeInsets.symmetric(vertical: 8),
-              child: Text(translate('Check for Updates'),
-                  style: TextStyle(
-                    decoration: TextDecoration.underline,
-                  )),
-            )),
         InkWell(
             onTap: () async {
               const url = 'https://rustdesk.com/';
