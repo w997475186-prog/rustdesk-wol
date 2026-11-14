@@ -286,22 +286,9 @@ fn verified_update_path(
 /// Where our own builds are published. The whole point of the fork: the
 /// official updater is switched off (see check_update), updates come from the
 /// self hosted api instead of github.com/rustdesk.
-const CUSTOM_UPDATE_LATEST_URL: &str = "https://144-24-53-228.sslip.io:21114/update/latest.json";
-
-/// Fetch the manifest of the latest build. Returns the raw json, the caller
-/// picks the per platform entry.
-pub fn custom_update_check() -> ResultType<String> {
-    let client = crate::hbbs_http::create_http_client_with_url(CUSTOM_UPDATE_LATEST_URL);
-    let resp = client
-        .get(CUSTOM_UPDATE_LATEST_URL)
-        .timeout(Duration::from_secs(20))
-        .send()?;
-    if !resp.status().is_success() {
-        bail!("HTTP {}", resp.status());
-    }
-    Ok(resp.text()?)
-}
-
+///
+/// The manifest fetch itself lives in `common` (CUSTOM_UPDATE_LATEST_URL /
+/// custom_update_check) because `updater` is not compiled for android/ios.
 /// Download the announced package, verify its sha256, then hand over to a small
 /// batch script that replaces the files after this process is gone. Doing the
 /// swap ourselves keeps the official (signed) installer out of the loop, which

@@ -58,7 +58,14 @@ Future<void> showCustomUpdateCheck() async {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('build: $remoteBuild'),
+          Text('服务器最新：$remoteBuild'),
+          if (!isWindows)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(localBuild.isEmpty
+                  ? '本机：未知（按下面按钮下载安装包）'
+                  : '本机：$localBuild'),
+            ),
           if (notes.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 8),
@@ -84,6 +91,8 @@ Future<void> showCustomUpdateCheck() async {
             if (!ok) {
               // Nothing to open a browser with: at least keep the link reachable.
               showToast(url);
+            } else {
+              showToast('已打开浏览器，下载完成后点通知栏安装');
             }
             return;
           }

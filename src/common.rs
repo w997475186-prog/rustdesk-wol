@@ -3098,6 +3098,28 @@ pub fn is_valid_untrusted_peer_id(id: &str) -> bool {
         })
 }
 
+/// Manifest of the newest build we host ourselves (written by publish_update.py).
+///
+/// Lives here rather than in `updater` because that module is not compiled for
+/// android/ios, yet the phone has to be able to read the same manifest to show
+/// which build is current. Only *applying* is desktop specific.
+pub const CUSTOM_UPDATE_LATEST_URL: &str =
+    "https://144-24-53-228.sslip.io:21114/update/latest.json";
+
+/// Fetch that manifest. The body is raw json; each frontend picks the entry for
+/// its own platform.
+pub fn custom_update_check() -> ResultType<String> {
+    let client = crate::hbbs_http::create_http_client_with_url(CUSTOM_UPDATE_LATEST_URL);
+    let resp = client
+        .get(CUSTOM_UPDATE_LATEST_URL)
+        .timeout(std::time::Duration::from_secs(20))
+        .send()?;
+    if !resp.status().is_success() {
+        bail!("HTTP {}", resp.status());
+    }
+    Ok(resp.text()?)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

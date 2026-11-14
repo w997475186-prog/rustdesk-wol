@@ -1826,12 +1826,14 @@ pub fn main_get_software_update_url() {
     crate::common::check_software_update();
 }
 
-/// Manifest of the newest self hosted build, see updater::custom_update_check.
+/// Manifest of the newest self hosted build, see common::custom_update_check.
+///
+/// Works on every platform: it is a plain HTTPS GET through the blocking
+/// client, and the phone needs it to show which build the server has. Only
+/// *applying* is Windows-only (see main_custom_update_apply) because Android
+/// has to hand the apk to the system installer.
 pub fn main_custom_update_check() -> String {
-    #[cfg(any(target_os = "android", target_os = "ios"))]
-    return "error:unsupported".to_owned();
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    match crate::updater::custom_update_check() {
+    match crate::common::custom_update_check() {
         Ok(s) => s,
         Err(e) => format!("error:{}", e),
     }
